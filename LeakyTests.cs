@@ -5,7 +5,7 @@ namespace wpf_memory_leaks;
 
 public class LeakyTests
 {
-    [Fact]
+    [UIFact]
     public async Task Test1()
     {
         WeakReference reference;
