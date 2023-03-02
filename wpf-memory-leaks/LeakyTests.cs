@@ -1,3 +1,5 @@
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using System.Windows.Controls;
 using System.Windows.Data;
 
@@ -9,7 +11,7 @@ public class LeakyTests
     public async Task BindingSource()
     {
         WeakReference reference;
-        var data = new { Text = "Foo" };
+        var data = new MySweetObject { Text = "Foo" };
 
         {
             var binding = new Binding("Text") { Source = data };
@@ -17,6 +19,7 @@ public class LeakyTests
             reference = new WeakReference(text);
             text.SetBinding(TextBlock.TextProperty, binding);
             Assert.Equal("Foo", text.Text);
+            Assert.Equal(1, data.SubscriberCount);
         }
         
         await Task.Yield();
@@ -24,13 +27,14 @@ public class LeakyTests
         GC.WaitForPendingFinalizers();
 
         Assert.False(reference.IsAlive, "TextBlock should not be alive!");
+        Assert.Equal(0, data.SubscriberCount);
     }
 
     [UIFact]
     public async Task BindingDataContext()
     {
         WeakReference reference;
-        var data = new { Text = "Foo" };
+        var data = new MySweetObject { Text = "Foo" };
 
         {
             var binding = new Binding("Text") { Mode = BindingMode.OneWay };
@@ -39,6 +43,7 @@ public class LeakyTests
             text.DataContext = data;
             text.SetBinding(TextBlock.TextProperty, binding);
             Assert.Equal("Foo", text.Text);
+            Assert.Equal(1, data.SubscriberCount);
         }
         
         await Task.Yield();
@@ -46,5 +51,33 @@ public class LeakyTests
         GC.WaitForPendingFinalizers();
 
         Assert.False(reference.IsAlive, "TextBlock should not be alive!");
+        Assert.Equal(0, data.SubscriberCount);
+    }
+
+    class MySweetObject : INotifyPropertyChanged
+    {
+        string _text = "";
+
+        public string Text
+        {
+            get => _text;
+            set
+            {
+                if (_text != value)
+                {
+                    _text = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        public int SubscriberCount => PropertyChanged?.GetInvocationList().Length ?? 0;
+
+        protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
     }
 }
