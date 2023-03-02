@@ -10,48 +10,66 @@ public class LeakyTests
     [UIFact]
     public async Task BindingSource()
     {
-        WeakReference reference;
+        WeakReference textReference, watcherReference;
         var data = new MySweetObject { Text = "Foo" };
 
         {
             var binding = new Binding("Text") { Source = data };
             var text = new TextBlock();
-            reference = new WeakReference(text);
+            textReference = new WeakReference(text);
             text.SetBinding(TextBlock.TextProperty, binding);
             Assert.Equal("Foo", text.Text);
-            Assert.Equal(1, data.SubscriberCount);
+            Assert.Single(data.Subscribers);
+
+            // Object subscribing
+            watcherReference = new WeakReference(data.Subscribers[0].Target);
         }
         
         await Task.Yield();
         GC.Collect();
         GC.WaitForPendingFinalizers();
 
-        Assert.False(reference.IsAlive, "TextBlock should not be alive!");
-        Assert.Equal(0, data.SubscriberCount);
+        Assert.False(textReference.IsAlive, "TextBlock should not be alive!");
+
+        await Task.Yield();
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+
+        Assert.False(watcherReference.IsAlive, $"Subscriber {watcherReference.Target} should not be alive!");
+        Assert.Empty(data.Subscribers);
     }
 
     [UIFact]
     public async Task BindingDataContext()
     {
-        WeakReference reference;
+        WeakReference textReference, watcherReference;
         var data = new MySweetObject { Text = "Foo" };
 
         {
             var binding = new Binding("Text") { Mode = BindingMode.OneWay };
             var text = new TextBlock();
-            reference = new WeakReference(text);
+            textReference = new WeakReference(text);
             text.DataContext = data;
             text.SetBinding(TextBlock.TextProperty, binding);
             Assert.Equal("Foo", text.Text);
-            Assert.Equal(1, data.SubscriberCount);
+            Assert.Single(data.Subscribers);
+
+            // Object subscribing
+            watcherReference = new WeakReference(data.Subscribers[0].Target);
         }
         
         await Task.Yield();
         GC.Collect();
         GC.WaitForPendingFinalizers();
 
-        Assert.False(reference.IsAlive, "TextBlock should not be alive!");
-        Assert.Equal(0, data.SubscriberCount);
+        Assert.False(textReference.IsAlive, "TextBlock should not be alive!");
+
+        await Task.Yield();
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+
+        Assert.False(watcherReference.IsAlive, $"Subscriber {watcherReference.Target} should not be alive!");
+        Assert.Empty(data.Subscribers);
     }
 
     class MySweetObject : INotifyPropertyChanged
@@ -71,7 +89,7 @@ public class LeakyTests
             }
         }
 
-        public int SubscriberCount => PropertyChanged?.GetInvocationList().Length ?? 0;
+        public Delegate[] Subscribers => PropertyChanged?.GetInvocationList() ?? Array.Empty<Delegate>();
 
         protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
         {
