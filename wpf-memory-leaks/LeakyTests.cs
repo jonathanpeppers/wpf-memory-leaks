@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 
@@ -10,18 +11,28 @@ public class LeakyTests
     [UIFact]
     public async Task BindingSource()
     {
-        WeakReference textReference, watcherReference;
+        var textBlocks = new List<WeakReference>();
+        WeakReference watcherReference;
         var data = new MySweetObject { Text = "Foo" };
 
         {
             var binding = new Binding("Text") { Source = data };
             var text = new TextBlock();
-            textReference = new WeakReference(text);
+            textBlocks.Add(new WeakReference(text));
             text.SetBinding(TextBlock.TextProperty, binding);
-            Assert.Equal("Foo", text.Text);
-            Assert.Single(data.Subscribers);
+            Assert.Equal(data.Text, text.Text);
+            text.SetBinding(TextBlock.FontFamilyProperty, binding);
+            Assert.Equal(data.Text, text.FontFamily.ToString());
 
-            // Object subscribing
+            text = new TextBlock();
+            textBlocks.Add(new WeakReference(text));
+            text.SetBinding(TextBlock.TextProperty, binding);
+            Assert.Equal(data.Text, text.Text);
+            text.SetBinding(TextBlock.FontFamilyProperty, binding);
+            Assert.Equal(data.Text, text.FontFamily.ToString());
+
+            // Single object subscribing
+            Assert.Single(data.Subscribers);
             watcherReference = new WeakReference(data.Subscribers[0].Target);
         }
         
@@ -29,32 +40,51 @@ public class LeakyTests
         GC.Collect();
         GC.WaitForPendingFinalizers();
 
-        Assert.False(textReference.IsAlive, "TextBlock should not be alive!");
+        foreach (var textReference in textBlocks)
+        {
+            Assert.False(textReference.IsAlive, "TextBlock should not be alive!");
+        }
 
         await Task.Yield();
         GC.Collect();
         GC.WaitForPendingFinalizers();
 
-        Assert.False(watcherReference.IsAlive, $"Subscriber {watcherReference.Target} should not be alive!");
-        Assert.Empty(data.Subscribers);
+        // 1 Global watcher is still alive
+        Assert.Single(data.Subscribers);
+        var watcher = watcherReference.Target;
+        Assert.NotNull(watcher);
+        var currentManager = MyManager.GetCurrentManager(watcher.GetType());
+        Assert.Same(currentManager, watcher);
     }
 
     [UIFact]
     public async Task BindingDataContext()
     {
-        WeakReference textReference, watcherReference;
+        var textBlocks = new List<WeakReference>();
+        WeakReference watcherReference;
         var data = new MySweetObject { Text = "Foo" };
 
         {
             var binding = new Binding("Text") { Mode = BindingMode.OneWay };
             var text = new TextBlock();
-            textReference = new WeakReference(text);
+            textBlocks.Add(new WeakReference(text));
             text.DataContext = data;
             text.SetBinding(TextBlock.TextProperty, binding);
-            Assert.Equal("Foo", text.Text);
+            Assert.Equal(data.Text, text.Text);
+            text.SetBinding(TextBlock.FontFamilyProperty, binding);
+            Assert.Equal(data.Text, text.FontFamily.ToString());
             Assert.Single(data.Subscribers);
 
-            // Object subscribing
+            text = new TextBlock();
+            textBlocks.Add(new WeakReference(text));
+            text.DataContext = data;
+            text.SetBinding(TextBlock.TextProperty, binding);
+            Assert.Equal(data.Text, text.Text);
+            text.SetBinding(TextBlock.FontFamilyProperty, binding);
+            Assert.Equal(data.Text, text.FontFamily.ToString());
+
+            // Single object subscribing
+            Assert.Single(data.Subscribers);
             watcherReference = new WeakReference(data.Subscribers[0].Target);
         }
         
@@ -62,14 +92,21 @@ public class LeakyTests
         GC.Collect();
         GC.WaitForPendingFinalizers();
 
-        Assert.False(textReference.IsAlive, "TextBlock should not be alive!");
+        foreach (var textReference in textBlocks)
+        {
+            Assert.False(textReference.IsAlive, "TextBlock should not be alive!");
+        }
 
         await Task.Yield();
         GC.Collect();
         GC.WaitForPendingFinalizers();
 
-        Assert.False(watcherReference.IsAlive, $"Subscriber {watcherReference.Target} should not be alive!");
-        Assert.Empty(data.Subscribers);
+        // 1 Global watcher is still alive
+        Assert.Single(data.Subscribers);
+        var watcher = watcherReference.Target;
+        Assert.NotNull(watcher);
+        var currentManager = MyManager.GetCurrentManager(watcher.GetType());
+        Assert.Same(currentManager, watcher);
     }
 
     class MySweetObject : INotifyPropertyChanged
@@ -97,5 +134,10 @@ public class LeakyTests
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;
+    }
+
+    abstract class MyManager : WeakEventManager
+    {
+        public static new WeakEventManager GetCurrentManager(Type managerType) => WeakEventManager.GetCurrentManager(managerType);
     }
 }
