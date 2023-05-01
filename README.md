@@ -21,6 +21,7 @@ MAUI:
 * [dotnet/maui#13806](https://github.com/dotnet/maui/pull/13806)
 * [dotnet/maui#13833](https://github.com/dotnet/maui/pull/13833)
 * [dotnet/maui#14108](https://github.com/dotnet/maui/pull/14108)
+* [dotnet/maui#14329](https://github.com/dotnet/maui/pull/14329)
 
 And for some ancient history:
 
